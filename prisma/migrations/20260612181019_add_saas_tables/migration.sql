@@ -1,4 +1,13 @@
--- CreateTable User
+/*
+  Warnings:
+
+  - Added the required column `userId` to the `Mess` table without a default value. This is not possible if the table is not empty.
+
+*/
+-- AlterTable
+ALTER TABLE "Mess" ADD COLUMN "userId" TEXT;
+
+-- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
     "email" TEXT NOT NULL,
@@ -15,7 +24,7 @@ CREATE TABLE "User" (
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable Plan
+-- CreateTable
 CREATE TABLE "Plan" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -35,7 +44,7 @@ CREATE TABLE "Plan" (
     CONSTRAINT "Plan_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable Subscription
+-- CreateTable
 CREATE TABLE "Subscription" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
@@ -56,7 +65,7 @@ CREATE TABLE "Subscription" (
     CONSTRAINT "Subscription_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable Payment
+-- CreateTable
 CREATE TABLE "Payment" (
     "id" TEXT NOT NULL,
     "subscriptionId" TEXT NOT NULL,
@@ -71,48 +80,56 @@ CREATE TABLE "Payment" (
     CONSTRAINT "Payment_pkey" PRIMARY KEY ("id")
 );
 
--- Update Mess table to add userId
-ALTER TABLE "Mess" ADD COLUMN "userId" TEXT;
-
--- Insert a default owner user to backfill existing Mess rows
-INSERT INTO "User" ("id","email","phone","firstName","lastName","businessName","verified","status","createdAt","updatedAt")
-VALUES ('saas_default_user','orphan-owners@example.invalid','0000000000','Default','Owner','Default Business',false,'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-ON CONFLICT ("id") DO NOTHING;
-
--- Backfill existing Mess rows to point to the default owner, then make the column NOT NULL
-UPDATE "Mess" SET "userId" = 'saas_default_user' WHERE "userId" IS NULL;
-ALTER TABLE "Mess" ALTER COLUMN "userId" SET NOT NULL;
-
--- CreateIndex User
+-- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "User_phone_key" ON "User"("phone");
+
+-- CreateIndex
 CREATE INDEX "User_email_idx" ON "User"("email");
+
+-- CreateIndex
 CREATE INDEX "User_phone_idx" ON "User"("phone");
 
--- CreateIndex Plan
+-- CreateIndex
 CREATE UNIQUE INDEX "Plan_name_key" ON "Plan"("name");
+
+-- CreateIndex
 CREATE INDEX "Plan_name_idx" ON "Plan"("name");
 
--- CreateIndex Subscription
-CREATE INDEX "Subscription_userId_idx" ON "Subscription"("userId");
-CREATE INDEX "Subscription_planId_idx" ON "Subscription"("planId");
-CREATE INDEX "Subscription_status_idx" ON "Subscription"("status");
+-- CreateIndex
 CREATE UNIQUE INDEX "Subscription_razorpaySubscriptionId_key" ON "Subscription"("razorpaySubscriptionId");
 
--- CreateIndex Payment
-CREATE INDEX "Payment_subscriptionId_idx" ON "Payment"("subscriptionId");
+-- CreateIndex
+CREATE INDEX "Subscription_userId_idx" ON "Subscription"("userId");
+
+-- CreateIndex
+CREATE INDEX "Subscription_planId_idx" ON "Subscription"("planId");
+
+-- CreateIndex
+CREATE INDEX "Subscription_status_idx" ON "Subscription"("status");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Payment_razorpayPaymentId_key" ON "Payment"("razorpayPaymentId");
 
--- CreateIndex Mess
+-- CreateIndex
+CREATE INDEX "Payment_subscriptionId_idx" ON "Payment"("subscriptionId");
+
+-- CreateIndex
+CREATE INDEX "Payment_razorpayPaymentId_idx" ON "Payment"("razorpayPaymentId");
+
+-- CreateIndex
 CREATE INDEX "Mess_userId_idx" ON "Mess"("userId");
 
--- AddForeignKey User (none needed, it's the root table)
--- AddForeignKey Subscription
+-- AddForeignKey
 ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_planId_fkey" FOREIGN KEY ("planId") REFERENCES "Plan"("id") ON UPDATE CASCADE;
 
--- AddForeignKey Payment
+-- AddForeignKey
+ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_planId_fkey" FOREIGN KEY ("planId") REFERENCES "Plan"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Payment" ADD CONSTRAINT "Payment_subscriptionId_fkey" FOREIGN KEY ("subscriptionId") REFERENCES "Subscription"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- AddForeignKey Mess
+-- AddForeignKey
 ALTER TABLE "Mess" ADD CONSTRAINT "Mess_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
