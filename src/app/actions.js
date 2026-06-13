@@ -92,33 +92,50 @@ export async function createMember(messId, input) {
     };
   }
 
+  const memberData = (() => {
+    const registrationDate =
+      parseDate(input?.registrationDate) || parseDate(todayValue());
+    let paymentDate = parseDate(input?.paymentDate);
+    const durationDays = parsePositiveInt(input?.durationDays, 30);
+    const amount = parseNonNegativeInt(input?.amount, 0);
+
+    const data = {
+      name,
+      mobile,
+      registrationDate,
+      durationDays,
+      amount,
+      plan,
+    };
+    const mealsPerDay = parsePositiveInt(input?.mealsPerDay, 2);
+    const remainingAmount = parseNonNegativeInt(input?.remainingAmount, 0);
+
+    // The DB currently requires paymentDate non-null; default to registrationDate when missing
+    if (!paymentDate) {
+      paymentDate = registrationDate;
+    }
+
+    data.paymentDate = paymentDate;
+    data.remainingAmount = remainingAmount;
+    data.mealsPerDay = mealsPerDay;
+
+    return data;
+  })();
+
   await prisma.member.create({
-    data: (() => {
-      const registrationDate =
-        parseDate(input?.registrationDate) || parseDate(todayValue());
-      let paymentDate = parseDate(input?.paymentDate);
-      const durationDays = parsePositiveInt(input?.durationDays, 30);
-      const amount = parseNonNegativeInt(input?.amount, 0);
-
-      const data = {
-        name,
-        mobile,
-        registrationDate,
-        durationDays,
-        amount,
-        plan,
-        mess: { connect: { id: mess.id } },
-      };
-
-      // The DB currently requires paymentDate non-null; default to registrationDate when missing
-      if (!paymentDate) {
-        paymentDate = registrationDate;
-      }
-
-      data.paymentDate = paymentDate;
-
-      return data;
-    })(),
+    data: {
+      ...memberData,
+      mess: { connect: { id: mess.id } },
+      renewals: {
+        create: {
+          paymentDate: memberData.paymentDate,
+          durationDays: memberData.durationDays,
+          amount: memberData.amount,
+          mealsPerDay: memberData.mealsPerDay,
+          plan: memberData.plan,
+        },
+      },
+    },
   });
 
   return dashboardResult(mess.id, `${name} added successfully.`);
@@ -127,12 +144,38 @@ export async function createMember(messId, input) {
 export async function renewMember(messId, memberId) {
   const mess = await getMessOrThrow(messId);
 
-  await prisma.member.updateMany({
+  const member = await prisma.member.findFirst({
     where: {
       id: String(memberId || ""),
       messId: mess.id,
     },
-    data: { paymentDate: parseDate(todayValue()) },
+    select: {
+      id: true,
+      durationDays: true,
+      amount: true,
+      plan: true,
+    },
+  });
+
+  if (!member) {
+    throw new Error("Member not found.");
+  }
+
+  const paymentDate = parseDate(todayValue());
+
+  await prisma.member.update({
+    where: { id: member.id },
+    data: {
+      paymentDate,
+      renewals: {
+        create: {
+          paymentDate,
+          durationDays: member.durationDays,
+          amount: member.amount,
+          plan: member.plan,
+        },
+      },
+    },
   });
 
   return dashboardResult(mess.id, "Member renewed successfully.");

@@ -24,6 +24,8 @@ const emptyForm = {
   paymentNotPaid: false,
   durationDays: "30",
   amount: "",
+  remainingAmount: "",
+  mealsPerDay: "2",
   plan: "Monthly meals",
 };
 
@@ -161,7 +163,7 @@ export default function AddMemberForm({ activeMess }) {
               </label>
             </div>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-4">
             <Field
               label="Days"
               name="durationDays"
@@ -179,6 +181,30 @@ export default function AddMemberForm({ activeMess }) {
               onChange={handleChange}
               placeholder="Rs."
             />
+            <Field
+              label="Remaining amount"
+              name="remainingAmount"
+              type="number"
+              min="0"
+              value={form.remainingAmount}
+              onChange={handleChange}
+              placeholder="Rs."
+            />
+            <div>
+              <label className="block text-sm font-semibold text-slate-700">Meals per day</label>
+              <select
+                name="mealsPerDay"
+                value={form.mealsPerDay}
+                onChange={handleChange}
+                className="mt-2 min-h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none ring-teal-600 transition focus:ring-2"
+              >
+                {[1, 2, 3].map((n) => (
+                  <option key={n} value={String(n)}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
           <Field
             label="Plan"

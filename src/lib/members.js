@@ -18,8 +18,18 @@ export const serializeMember = (member) => ({
   registrationDate: toDateValue(member.registrationDate),
   paymentDate: member.paymentDate ? toDateValue(member.paymentDate) : null,
   durationDays: member.durationDays,
+  remainingAmount: member.remainingAmount || 0,
+  mealsPerDay: member.mealsPerDay || 2,
   amount: member.amount,
   plan: member.plan,
+  renewals: (member.renewals || []).map((renewal) => ({
+    id: renewal.id,
+    paymentDate: toDateValue(renewal.paymentDate),
+    durationDays: renewal.durationDays,
+    amount: renewal.amount,
+    mealsPerDay: renewal.mealsPerDay || 2,
+    plan: renewal.plan,
+  })),
 });
 
 export const ensureDefaultMess = async () => {
@@ -53,6 +63,11 @@ export const getMembers = async (messId) => {
   const members = await prisma.member.findMany({
     where: { messId },
     orderBy: [{ createdAt: "desc" }, { name: "asc" }],
+    include: {
+      renewals: {
+        orderBy: { paymentDate: "desc" },
+      },
+    },
   });
 
   return members.map(serializeMember);

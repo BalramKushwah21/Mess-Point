@@ -107,6 +107,7 @@ export default function Dashboard({ initialData }) {
   const [activeMess, setActiveMess] = useState(initialData.activeMess);
   const [members, setMembers] = useState(initialData.members);
   const [ownerNumber, setOwnerNumberState] = useState(initialData.ownerNumber);
+  const [selectedMemberId, setSelectedMemberId] = useState("");
   const [newMessName, setNewMessName] = useState("");
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
@@ -189,6 +190,11 @@ export default function Dashboard({ initialData }) {
     [members, today],
   );
 
+  const selectedMember = useMemo(
+    () => enrichedMembers.find((member) => member.id === selectedMemberId),
+    [enrichedMembers, selectedMemberId],
+  );
+
   const expiredMembers = enrichedMembers.filter(
     (member) => member.status.label === "Expired",
   );
@@ -226,6 +232,12 @@ export default function Dashboard({ initialData }) {
         )
         .join("\n")}`
     : "No expired mess memberships today.";
+
+  const toggleMemberHistory = (memberId) => {
+    setSelectedMemberId((current) =>
+      current === memberId ? "" : memberId,
+    );
+  };
 
   const removeMember = (memberId) => {
     runDashboardMutation(() => deleteMember(activeMessId, memberId));
@@ -419,6 +431,59 @@ export default function Dashboard({ initialData }) {
             <div className="flex flex-col gap-4 border-b border-slate-200 p-5 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.16em] text-teal-700">
+                  Membership history
+                </p>
+                <h2 className="mt-1 text-xl font-bold">Lifetime renewals</h2>
+              </div>
+              {selectedMember ? (
+                <p className="text-sm text-slate-600">
+                  Showing {selectedMember.renewals.length} renewal event
+                  {selectedMember.renewals.length === 1 ? "" : "s"} for {selectedMember.name}
+                </p>
+              ) : null}
+            </div>
+            <div className="divide-y divide-slate-200 p-5">
+              {selectedMember ? (
+                selectedMember.renewals.length ? (
+                  <div className="space-y-3">
+                    {selectedMember.renewals.map((record) => (
+                      <div
+                        key={record.id}
+                        className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">
+                              Paid on {formatDate(record.paymentDate)}
+                            </p>
+                            <p className="mt-1 text-sm text-slate-600">
+                              Rs. {Number(record.amount || 0).toLocaleString("en-IN")} · {record.durationDays} days · {record.plan}
+                            </p>
+                          </div>
+                          <p className="text-sm font-semibold text-slate-700">
+                            Expires on {formatDate(addDays(record.paymentDate, record.durationDays))}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    No renewal records for this member yet.
+                  </p>
+                )
+              ) : (
+                <p className="text-sm text-slate-500">
+                  Click the History button for any member to view their full payment and renewal timeline.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div className="flex flex-col gap-4 border-b border-slate-200 p-5 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-teal-700">
                   Customer register
                 </p>
                 <h2 className="mt-1 text-xl font-bold">
@@ -458,6 +523,8 @@ export default function Dashboard({ initialData }) {
                     onWhatsApp={() =>
                       openWhatsApp(member.mobile, reminderMessage(member))
                     }
+                    onHistory={() => toggleMemberHistory(member.id)}
+                    isHistorySelected={member.id === selectedMemberId}
                   />
                 ))
               ) : (
@@ -502,7 +569,7 @@ function SummaryCard({ label, value, tone }) {
   );
 }
 
-function MemberRow({ member, pending, onRenew, onDelete, onWhatsApp }) {
+function MemberRow({ member, pending, onRenew, onDelete, onWhatsApp, onHistory, isHistorySelected }) {
   return (
     <article className={`grid gap-4 p-5 lg:grid-cols-[1.1fr_1fr_auto] ${member.status.row}`}>
       <div>
@@ -543,6 +610,17 @@ function MemberRow({ member, pending, onRenew, onDelete, onWhatsApp }) {
           className="min-h-10 rounded-md bg-emerald-700 px-3 text-sm font-bold text-white transition hover:bg-emerald-800"
         >
           WhatsApp
+        </button>
+        <button
+          type="button"
+          onClick={onHistory}
+          className={`min-h-10 rounded-md px-3 text-sm font-bold transition ${
+            isHistorySelected
+              ? "bg-slate-950 text-white hover:bg-slate-800"
+              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+          }`}
+        >
+          {isHistorySelected ? "Hide history" : "History"}
         </button>
         <button
           type="button"

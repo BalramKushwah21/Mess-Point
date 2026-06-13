@@ -13,7 +13,8 @@ export default async function DashboardPage({ searchParams }) {
     redirect("/login");
   }
 
-  const initialData = await getDashboardData(searchParams?.messId);
+  const resolvedSearchParams = await searchParams;
+  const initialData = await getDashboardData(resolvedSearchParams?.messId);
 
   return <Dashboard initialData={initialData} />;
 }
