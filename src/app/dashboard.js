@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 
 import {
   createMess,
-  createMember,
   deleteMember,
   loadMess,
   renewMember as renewMemberAction,
@@ -59,6 +58,16 @@ const openWhatsApp = (phone, message) => {
 };
 
 const getMemberStatus = (member, today) => {
+  if (!member.paymentDate) {
+    return {
+      expiryDate: "Not paid",
+      daysLeft: -1,
+      label: "Not paid",
+      tone: "bg-rose-100 text-rose-700 ring-rose-200",
+      row: "border-rose-200 bg-rose-50/70",
+    };
+  }
+
   const expiryDate = addDays(member.paymentDate, member.durationDays);
   const daysLeft = daysBetween(today, expiryDate);
 
@@ -91,16 +100,6 @@ const getMemberStatus = (member, today) => {
   };
 };
 
-const emptyForm = {
-  name: "",
-  mobile: "",
-  registrationDate: todayValue(),
-  paymentDate: todayValue(),
-  durationDays: "30",
-  amount: "",
-  plan: "Monthly meals",
-};
-
 export default function Dashboard({ initialData }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -109,7 +108,6 @@ export default function Dashboard({ initialData }) {
   const [members, setMembers] = useState(initialData.members);
   const [ownerNumber, setOwnerNumberState] = useState(initialData.ownerNumber);
   const [newMessName, setNewMessName] = useState("");
-  const [form, setForm] = useState(emptyForm);
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState("");
@@ -229,44 +227,20 @@ export default function Dashboard({ initialData }) {
         .join("\n")}`
     : "No expired mess memberships today.";
 
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-    setForm((current) => ({ ...current, [name]: value }));
-  };
-
-  const handleSubmit = (event) => {
-    event.preventDefault();
-
-    const mobile = normalizeWhatsAppNumber(form.mobile);
-
-    if (!form.name.trim() || !mobile) {
-      setNotice("Add member name and mobile number.");
-      return;
-    }
-
-    runDashboardMutation(async () => {
-      const result = await createMember(activeMessId, form);
-
-      if (result?.ok) {
-        setForm({ ...emptyForm, registrationDate: today, paymentDate: today });
-      }
-
-      return result;
-    });
+  const removeMember = (memberId) => {
+    runDashboardMutation(() => deleteMember(activeMessId, memberId));
   };
 
   const renewMember = (memberId) => {
     runDashboardMutation(() => renewMemberAction(activeMessId, memberId));
   };
 
-  const removeMember = (memberId) => {
-    runDashboardMutation(() => deleteMember(activeMessId, memberId));
-  };
-
   const reminderMessage = (member) =>
     `Hello ${member.name}, your mess membership ${
       member.status.label === "Expired"
         ? `expired on ${formatDate(member.status.expiryDate)}`
+        : member.status.label === "Not paid"
+        ? `has not been paid yet`
         : `will expire on ${formatDate(member.status.expiryDate)}`
     }. Please renew your payment to continue meal service.`;
 
@@ -369,10 +343,7 @@ export default function Dashboard({ initialData }) {
 
       <section className="mx-auto grid max-w-7xl gap-6 px-5 py-6 sm:px-8 lg:grid-cols-[380px_1fr] lg:px-10">
         <div className="space-y-6">
-          <form
-            onSubmit={handleSubmit}
-            className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
-          >
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-5 flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.16em] text-teal-700">
@@ -380,82 +351,19 @@ export default function Dashboard({ initialData }) {
                 </p>
                 <h2 className="text-xl font-bold">Add member</h2>
               </div>
-              <button
-                type="submit"
-                disabled={isPending}
-                className="min-h-11 rounded-md bg-teal-700 px-4 text-sm font-bold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                {isPending ? "Saving" : "Add"}
-              </button>
             </div>
 
-            <div className="grid gap-4">
-              <Field
-                label="Customer name"
-                name="name"
-                value={form.name}
-                onChange={handleChange}
-                placeholder="Full name"
-                required
-              />
-              <Field
-                label="Mobile number"
-                name="mobile"
-                value={form.mobile}
-                onChange={handleChange}
-                placeholder="10 digit number"
-                inputMode="tel"
-                required
-              />
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field
-                  label="Registration date"
-                  name="registrationDate"
-                  type="date"
-                  value={form.registrationDate}
-                  onChange={handleChange}
-                />
-                <Field
-                  label="Payment date"
-                  name="paymentDate"
-                  type="date"
-                  value={form.paymentDate}
-                  onChange={handleChange}
-                />
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field
-                  label="Days"
-                  name="durationDays"
-                  type="number"
-                  min="1"
-                  value={form.durationDays}
-                  onChange={handleChange}
-                />
-                <Field
-                  label="Amount"
-                  name="amount"
-                  type="number"
-                  min="0"
-                  value={form.amount}
-                  onChange={handleChange}
-                  placeholder="Rs."
-                />
-              </div>
-              <Field
-                label="Plan"
-                name="plan"
-                value={form.plan}
-                onChange={handleChange}
-                placeholder="Monthly meals"
-              />
-            </div>
-            {notice ? (
-              <p className="mt-4 rounded-md bg-teal-50 px-3 py-2 text-sm font-medium text-teal-800">
-                {notice}
-              </p>
-            ) : null}
-          </form>
+            <p className="mb-4 text-sm text-slate-600">
+              Click the button below to register a new customer and add them to this mess.
+            </p>
+
+            <a
+              href="/dashboard/add-member"
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-teal-700 px-4 text-sm font-bold text-white transition hover:bg-teal-800"
+            >
+              Register new customer
+            </a>
+          </div>
 
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-rose-700">
@@ -576,18 +484,6 @@ function Metric({ label, value }) {
   );
 }
 
-function Field({ label, ...props }) {
-  return (
-    <label className="block text-sm font-semibold text-slate-700">
-      {label}
-      <input
-        {...props}
-        className="mt-2 min-h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-950 outline-none ring-teal-600 transition placeholder:text-slate-400 focus:ring-2"
-      />
-    </label>
-  );
-}
-
 function SummaryCard({ label, value, tone }) {
   const tones = {
     teal: "border-teal-200 bg-teal-50 text-teal-800",
@@ -623,7 +519,7 @@ function MemberRow({ member, pending, onRenew, onDelete, onWhatsApp }) {
         </p>
         <p className="mt-3 text-sm text-slate-600">
           Registered {formatDate(member.registrationDate)} | Paid{" "}
-          {formatDate(member.paymentDate)} | Rs.{" "}
+          {member.paymentDate ? formatDate(member.paymentDate) : "Not paid"} | Rs.{" "}
           {Number(member.amount || 0).toLocaleString("en-IN")}
         </p>
       </div>

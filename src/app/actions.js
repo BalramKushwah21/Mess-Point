@@ -18,12 +18,15 @@ const normalizeWhatsAppNumber = (value) => {
 };
 
 const parseDate = (value) => {
-  const dateValue = String(value || todayValue()).slice(0, 10);
+  const dateValue = String(value || "").slice(0, 10);
+
+  if (!dateValue) {
+    return null;
+  }
+
   const date = new Date(`${dateValue}T00:00:00.000Z`);
 
-  return Number.isNaN(date.getTime())
-    ? new Date(`${todayValue()}T00:00:00.000Z`)
-    : date;
+  return Number.isNaN(date.getTime()) ? null : date;
 };
 
 const parsePositiveInt = (value, fallback) => {
@@ -90,16 +93,32 @@ export async function createMember(messId, input) {
   }
 
   await prisma.member.create({
-    data: {
-      messId: mess.id,
-      name,
-      mobile,
-      registrationDate: parseDate(input?.registrationDate),
-      paymentDate: parseDate(input?.paymentDate),
-      durationDays: parsePositiveInt(input?.durationDays, 30),
-      amount: parseNonNegativeInt(input?.amount, 0),
-      plan,
-    },
+    data: (() => {
+      const registrationDate =
+        parseDate(input?.registrationDate) || parseDate(todayValue());
+      let paymentDate = parseDate(input?.paymentDate);
+      const durationDays = parsePositiveInt(input?.durationDays, 30);
+      const amount = parseNonNegativeInt(input?.amount, 0);
+
+      const data = {
+        name,
+        mobile,
+        registrationDate,
+        durationDays,
+        amount,
+        plan,
+        mess: { connect: { id: mess.id } },
+      };
+
+      // The DB currently requires paymentDate non-null; default to registrationDate when missing
+      if (!paymentDate) {
+        paymentDate = registrationDate;
+      }
+
+      data.paymentDate = paymentDate;
+
+      return data;
+    })(),
   });
 
   return dashboardResult(mess.id, `${name} added successfully.`);

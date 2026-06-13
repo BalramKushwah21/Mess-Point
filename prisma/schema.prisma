@@ -133,7 +133,7 @@ model Member {
   name             String
   mobile           String
   registrationDate DateTime @db.Date
-  paymentDate      DateTime @db.Date
+  paymentDate      DateTime? @db.Date
   durationDays     Int      @default(30)
   amount           Int      @default(0)
   plan             String   @default("Monthly meals")

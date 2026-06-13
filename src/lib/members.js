@@ -16,7 +16,7 @@ export const serializeMember = (member) => ({
   name: member.name,
   mobile: member.mobile,
   registrationDate: toDateValue(member.registrationDate),
-  paymentDate: toDateValue(member.paymentDate),
+  paymentDate: member.paymentDate ? toDateValue(member.paymentDate) : null,
   durationDays: member.durationDays,
   amount: member.amount,
   plan: member.plan,
