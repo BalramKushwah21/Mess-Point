@@ -9,15 +9,6 @@ export function proxy(request) {
 		return NextResponse.next();
 	}
 
-	// 2. Public assets aur API auth routes ko bypass karein
-	if (
-		pathname.startsWith("/api/auth") ||
-		pathname.startsWith("/_next") ||
-		pathname.includes(".")
-	) {
-		return NextResponse.next();
-	}
-
 	// 3. Agar token nahi hai, toh login page par redirect karein
 	if (!token) {
 		return NextResponse.redirect(new URL("/auth/login", request.url));
