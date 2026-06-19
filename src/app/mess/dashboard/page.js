@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Logout from "@/components/logout";
 
 export default function Dashboard() {
 	const router = useRouter();
@@ -191,6 +192,9 @@ export default function Dashboard() {
 					>
 						🛵 Parcels
 					</button>
+
+					<Logout/>
+
 				</nav>
 			</aside>
 

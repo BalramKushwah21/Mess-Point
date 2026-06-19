@@ -43,7 +43,7 @@ export default function AddEmployee() {
 
 			setIsLoading(false);
 			alert("Naya Employee successfully add ho gaya hai!");
-			router.push("/dashboard");
+			router.push("/mess/dashboard");
 			router.refresh();
 		} catch (error) {
 			setErrorMessage(error.message || "System mein kuch gadbad hai.");
