@@ -1,16 +1,17 @@
-import { PrismaClient } from "@/generated/prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "@prisma/client";
 
-const globalForPrisma = globalThis;
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+// PrismaClient ka ek global instance banate hain
+let prisma;
 
-export const prisma =
-  globalForPrisma.prisma ||
-  new PrismaClient({
-    adapter,
-    log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
-  });
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
+if (process.env.NODE_ENV === "production") {
+	// Production mein seedha naya client create karein
+	prisma = new PrismaClient();
+} else {
+	// Development mode mein global object ka use karein taaki hot-reloading se multiple connections na bane
+	if (!global.prisma) {
+		global.prisma = new PrismaClient();
+	}
+	prisma = global.prisma;
 }
+
+export default prisma;
