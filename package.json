@@ -1,30 +1,30 @@
 {
-  "name": "mess-point",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "@prisma/client": "^5.22.0",
-    "bcrypt": "^6.0.0",
-    "bcryptjs": "^3.0.3",
-    "next": "16.2.9",
-    "next-auth": "^4.24.14",
-    "prisma": "^5.22.0",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "25.9.3",
-    "@types/react": "19.2.17",
-    "babel-plugin-react-compiler": "1.0.0",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.9",
-    "tailwindcss": "^4"
-  }
+	"name": "mess-point",
+	"version": "0.1.0",
+	"private": true,
+	"scripts": {
+		"dev": "next dev",
+		"build": "prisma generate && next build",
+		"start": "next start",
+		"lint": "eslint"
+	},
+	"dependencies": {
+		"@prisma/client": "^5.22.0",
+		"bcrypt": "^6.0.0",
+		"bcryptjs": "^3.0.3",
+		"next": "16.2.9",
+		"next-auth": "^4.24.14",
+		"prisma": "^5.22.0",
+		"react": "19.2.4",
+		"react-dom": "19.2.4"
+	},
+	"devDependencies": {
+		"@tailwindcss/postcss": "^4",
+		"@types/node": "25.9.3",
+		"@types/react": "19.2.17",
+		"babel-plugin-react-compiler": "1.0.0",
+		"eslint": "^9",
+		"eslint-config-next": "16.2.9",
+		"tailwindcss": "^4"
+	}
 }
