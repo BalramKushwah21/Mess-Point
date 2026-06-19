@@ -1,20 +1,32 @@
-// src/proxy.js
 import { NextResponse } from "next/server";
 
 export function proxy(request) {
 	const token = request.cookies.get("next-auth.session-token");
+	const { pathname } = request.nextUrl;
 
-	// Agar token nahi hai, toh user ko login page par bhejen
+	// 1. Agar user pehle se login page par hai, toh access karne dein
+	if (pathname.startsWith("/auth/login")) {
+		return NextResponse.next();
+	}
+
+	// 2. Public assets aur API auth routes ko bypass karein
+	if (
+		pathname.startsWith("/api/auth") ||
+		pathname.startsWith("/_next") ||
+		pathname.includes(".")
+	) {
+		return NextResponse.next();
+	}
+
+	// 3. Agar token nahi hai, toh login page par redirect karein
 	if (!token) {
-		return NextResponse.redirect(new URL("/login", request.url));
+		return NextResponse.redirect(new URL("/auth/login", request.url));
 	}
 
 	return NextResponse.next();
 }
 
-// Yeh config sabhi routes ko protect karega, sirf login aur assets ko chhod kar
+// 4. Matcher configuration
 export const config = {
-	matcher: [
-		"/((?!login|api/auth|register|_next/static|_next/image|favicon.ico).*)",
-	],
+	matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico).*)"],
 };
