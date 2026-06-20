@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 
-export function proxy(request) {
-	const token = request.cookies.get("next-auth.session-token");
+export function middleware(request) {
+	// FIX: Localhost aur Vercel (HTTPS) dono ki cookies ko check karein
+	const token =
+		request.cookies.get("next-auth.session-token") ||
+		request.cookies.get("__Secure-next-auth.session-token");
+
 	const { pathname } = request.nextUrl;
 
 	// 1. Next.js ke system files aur APIs ko bypass karein
@@ -23,7 +27,6 @@ export function proxy(request) {
 	}
 
 	// 4. Protection Logic: Agar token nahi hai aur user secure pages (dashboard etc.) par jana chahe
-	// Yani page na toh homepage hai aur na hi auth page hai
 	if (!token && !isHomePage && !isAuthPath) {
 		return NextResponse.redirect(new URL("/auth/login", request.url));
 	}
@@ -32,7 +35,7 @@ export function proxy(request) {
 	return NextResponse.next();
 }
 
-// 5. Matcher Configuration (Yeh same rahega)
+// 5. Matcher Configuration
 export const config = {
 	matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico).*)"],
 };
