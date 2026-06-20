@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Logout from "@/components/logout";
 
@@ -18,6 +17,9 @@ export default function Dashboard() {
 	const [activeTab, setActiveTab] = useState("customers");
 	const [searchQuery, setSearchQuery] = useState("");
 
+	// Customer filter state
+	const [customerFilter, setCustomerFilter] = useState("all");
+
 	// States for data
 	const [stats, setStats] = useState({
 		total: 0,
@@ -29,6 +31,10 @@ export default function Dashboard() {
 	const [employees, setEmployees] = useState([]);
 	const [parcels, setParcels] = useState([]);
 	const [isLoading, setIsLoading] = useState(true);
+	const [messName, setMessName] = useState("Loading...");
+
+	// UI Action States
+	const [isGenerating, setIsGenerating] = useState(false);
 
 	// ============= EDIT & RENEW MODAL STATES =============
 	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -48,7 +54,8 @@ export default function Dashboard() {
 				setStats(data.stats);
 				setCustomers(data.customers);
 				setEmployees(data.employees);
-				setParcels(data.parcels);
+				setParcels(data.parcels || []);
+				setMessName(data.messName || "Mess-Point");
 			}
 		} catch (error) {
 			console.error("Error fetching dashboard data:", error);
@@ -67,13 +74,11 @@ export default function Dashboard() {
 			plan: customer.plan,
 			mealsPerDay: customer.mealsPerDay,
 			deliveryType: customer.deliveryType,
-
 			addedDays: 0,
 			billAmount: 0,
 			paidAmount: 0,
 			paymentStatus: "Paid",
-
-			existingRemaining: customer.remainingAmount,
+			existingRemaining: customer.remainingAmount || 0,
 		});
 		setIsEditModalOpen(true);
 	};
@@ -91,7 +96,6 @@ export default function Dashboard() {
 
 		setEditFormData((prev) => {
 			const updated = { ...prev, [name]: parsedValue };
-
 			if (name === "billAmount" || name === "paidAmount") {
 				const bill =
 					name === "billAmount" ? parsedValue : prev.billAmount;
@@ -115,7 +119,7 @@ export default function Dashboard() {
 				body: JSON.stringify(editFormData),
 			});
 			if (response.ok) {
-				alert("Customer details updated aur record save ho gaya!");
+				alert("Customer updated successfully!");
 				setIsEditModalOpen(false);
 				fetchDashboardData();
 			} else {
@@ -128,23 +132,108 @@ export default function Dashboard() {
 		}
 	};
 
-	// Filters
-	const filteredCustomers = customers.filter(
-		(c) =>
-			c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			c.phone.includes(searchQuery),
-	);
+	// ================= WHATSAPP MESSAGE LOGIC (NAYA ADD KIYA) =================
+	const sendWhatsAppMessage = (customer) => {
+		let message = "";
+
+		// Din ke hisaab se message
+		if (customer.daysLeft > 0) {
+			message = `Namaste ${customer.name},\nAapki Mess service ke *${customer.daysLeft} din* baaki hain.`;
+		} else {
+			message = `Namaste ${customer.name},\n⚠️ Aapki Mess service *expire* ho chuki hai. Kripya apni service continue rakhne ke liye renew karein.`;
+		}
+
+		// Agar purana paisa baki hai toh wo bhi add karein
+		if (customer.remainingAmount > 0) {
+			message += `\n\nSath hi, aapka pichla due amount: *₹${customer.remainingAmount}* hai.`;
+		}
+
+		message += `\n\nDhanyawad,\n*${messName}*`;
+
+		// Number format karna (Agar +91 nahi hai toh laga do)
+		let phoneNum = customer.phone.replace(/\D/g, ""); // Sirf numbers nikalna
+		if (phoneNum.length === 10) {
+			phoneNum = "91" + phoneNum;
+		}
+
+		// URL encode karke naye tab me open karna
+		const encodedMessage = encodeURIComponent(message);
+		const whatsappUrl = `https://wa.me/${phoneNum}?text=${encodedMessage}`;
+		window.open(whatsappUrl, "_blank");
+	};
+
+	// ================= PARCEL ACTIONS =================
+	const handleGenerateParcels = async () => {
+		setIsGenerating(true);
+		try {
+			const res = await fetch("/api/parcels/generate", {
+				method: "POST",
+			});
+			const data = await res.json();
+			if (res.ok) {
+				alert("Aaj ki Deliveries Generate ho gayi hain!");
+				fetchDashboardData();
+			} else {
+				alert(data.error || "Generation Failed");
+			}
+		} catch (error) {
+			alert("System Error!");
+		} finally {
+			setIsGenerating(false);
+		}
+	};
+
+	const handleMarkDone = async (parcelId) => {
+		try {
+			const res = await fetch("/api/parcels/mark-done", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ parcelId }),
+			});
+			if (res.ok) {
+				fetchDashboardData();
+			} else {
+				alert("Failed to mark done");
+			}
+		} catch (error) {
+			alert("System Error!");
+		}
+	};
+
+	// ================= DYNAMIC FILTERS =================
+	const filteredCustomers = customers.filter((c) => {
+		const matchesSearch =
+			(c.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+			(c.phone || "").includes(searchQuery);
+		if (!matchesSearch) return false;
+
+		if (customerFilter === "expiring")
+			return c.daysLeft > 0 && c.daysLeft <= 3;
+		if (customerFilter === "expired") return c.daysLeft <= 0;
+		if (customerFilter === "due") return c.remainingAmount > 0;
+
+		return true;
+	});
+
 	const filteredEmployees = employees.filter(
 		(emp) =>
-			emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			emp.role.toLowerCase().includes(searchQuery.toLowerCase()),
-	);
-	const filteredParcels = parcels.filter(
-		(p) =>
-			p.customer?.name
+			(emp.name || "")
 				.toLowerCase()
 				.includes(searchQuery.toLowerCase()) ||
-			p.customer?.phone.includes(searchQuery),
+			(emp.role || "").toLowerCase().includes(searchQuery.toLowerCase()),
+	);
+
+	const filteredParcels = parcels.filter(
+		(p) =>
+			(p.customer?.name || "")
+				.toLowerCase()
+				.includes(searchQuery.toLowerCase()) ||
+			(p.customer?.phone || "").includes(searchQuery),
+	);
+
+	const totalSalaryExpense = employees.reduce(
+		(acc, emp) => acc + (emp.baseSalary || 0),
+		0,
 	);
 
 	if (isLoading)
@@ -165,8 +254,11 @@ export default function Dashboard() {
 			<aside className="w-full md:w-72 bg-white shadow-[0_0_40px_-10px_rgba(0,0,0,0.05)] border-r border-gray-100 flex-shrink-0 z-10">
 				<div className="p-6 border-b border-gray-50 flex items-center justify-between md:block">
 					<div>
-						<h2 className="text-3xl font-black bg-gradient-to-r from-orange-600 to-amber-500 bg-clip-text text-transparent drop-shadow-sm">
-							Mess-Point
+						<h2
+							className="text-3xl font-black bg-gradient-to-r from-orange-600 to-amber-500 bg-clip-text text-transparent drop-shadow-sm truncate"
+							title={messName}
+						>
+							{messName}
 						</h2>
 						<p className="text-xs font-semibold text-gray-400 mt-1 uppercase tracking-wider">
 							Management Portal
@@ -174,12 +266,12 @@ export default function Dashboard() {
 					</div>
 				</div>
 
-				{/* Mobile Scrollable Nav & Desktop Vertical Nav */}
 				<nav className="p-4 flex md:flex-col gap-2 overflow-x-auto md:overflow-visible no-scrollbar">
 					<button
 						onClick={() => {
 							setActiveTab("customers");
 							setSearchQuery("");
+							setCustomerFilter("all");
 						}}
 						className={`flex-shrink-0 md:w-full text-left px-5 py-3.5 rounded-xl font-bold transition-all duration-200 flex items-center gap-3 ${activeTab === "customers" ? "bg-orange-50 text-orange-700 shadow-[inset_0px_0px_0px_1px_rgba(234,88,12,0.15)]" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}
 					>
@@ -208,52 +300,84 @@ export default function Dashboard() {
 					</button>
 
 					<div className="md:mt-auto pt-4 md:border-t border-gray-100 flex-shrink-0">
-						<Logout />
 					</div>
+						<Logout />
 				</nav>
 			</aside>
 
 			{/* Main Content Area */}
 			<main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-				{/* Top Stats Cards */}
-				<div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
-					<div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden group">
-						<div className="absolute -right-4 -top-4 w-16 h-16 bg-blue-50 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
-						<p className="text-xs sm:text-sm font-bold text-gray-500 uppercase tracking-wide relative z-10">
-							Total Customers
-						</p>
-						<p className="text-3xl sm:text-4xl font-black text-gray-800 mt-2 relative z-10">
-							{stats.total}
-						</p>
+				{/* ================= DYNAMIC TOP STATS CARDS ================= */}
+				{activeTab === "customers" && (
+					<div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8 animate-fade-in">
+						<div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
+							<p className="text-xs sm:text-sm font-bold text-gray-500 uppercase tracking-wide">
+								Total Customers
+							</p>
+							<p className="text-3xl sm:text-4xl font-black text-gray-800 mt-2">
+								{stats.total}
+							</p>
+						</div>
+						<div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-emerald-100 relative overflow-hidden">
+							<p className="text-xs sm:text-sm font-bold text-emerald-600 uppercase tracking-wide">
+								Active
+							</p>
+							<p className="text-3xl sm:text-4xl font-black text-emerald-600 mt-2">
+								{stats.active}
+							</p>
+						</div>
+						<div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-amber-100 relative overflow-hidden">
+							<p className="text-xs sm:text-sm font-bold text-amber-600 uppercase tracking-wide">
+								Expiring Soon
+							</p>
+							<p className="text-3xl sm:text-4xl font-black text-amber-500 mt-2">
+								{stats.expiring}
+							</p>
+						</div>
+						<div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-rose-100 relative overflow-hidden">
+							<p className="text-xs sm:text-sm font-bold text-rose-600 uppercase tracking-wide">
+								Expired
+							</p>
+							<p className="text-3xl sm:text-4xl font-black text-rose-600 mt-2">
+								{stats.expired}
+							</p>
+						</div>
 					</div>
-					<div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-emerald-100 hover:shadow-md transition-shadow relative overflow-hidden group">
-						<div className="absolute -right-4 -top-4 w-16 h-16 bg-emerald-50 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
-						<p className="text-xs sm:text-sm font-bold text-emerald-600 uppercase tracking-wide relative z-10">
-							Active
-						</p>
-						<p className="text-3xl sm:text-4xl font-black text-emerald-600 mt-2 relative z-10">
-							{stats.active}
-						</p>
+				)}
+
+				{activeTab === "employees" && (
+					<div className="grid grid-cols-2 gap-4 sm:gap-6 mb-8 animate-fade-in">
+						<div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-indigo-100 relative overflow-hidden">
+							<p className="text-xs sm:text-sm font-bold text-indigo-600 uppercase tracking-wide">
+								Total Staff Members
+							</p>
+							<p className="text-3xl sm:text-4xl font-black text-indigo-600 mt-2">
+								{employees.length}
+							</p>
+						</div>
+						<div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-blue-100 relative overflow-hidden">
+							<p className="text-xs sm:text-sm font-bold text-blue-600 uppercase tracking-wide">
+								Total Monthly Salary
+							</p>
+							<p className="text-3xl sm:text-4xl font-black text-blue-600 mt-2">
+								₹{totalSalaryExpense}
+							</p>
+						</div>
 					</div>
-					<div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-amber-100 hover:shadow-md transition-shadow relative overflow-hidden group">
-						<div className="absolute -right-4 -top-4 w-16 h-16 bg-amber-50 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
-						<p className="text-xs sm:text-sm font-bold text-amber-600 uppercase tracking-wide relative z-10">
-							Expiring Soon
-						</p>
-						<p className="text-3xl sm:text-4xl font-black text-amber-500 mt-2 relative z-10">
-							{stats.expiring}
-						</p>
+				)}
+
+				{activeTab === "parcels" && (
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-8 animate-fade-in">
+						<div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-orange-100 relative overflow-hidden">
+							<p className="text-xs sm:text-sm font-bold text-orange-600 uppercase tracking-wide">
+								Pending Deliveries
+							</p>
+							<p className="text-3xl sm:text-4xl font-black text-orange-600 mt-2">
+								{parcels.length}
+							</p>
+						</div>
 					</div>
-					<div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-rose-100 hover:shadow-md transition-shadow relative overflow-hidden group">
-						<div className="absolute -right-4 -top-4 w-16 h-16 bg-rose-50 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
-						<p className="text-xs sm:text-sm font-bold text-rose-600 uppercase tracking-wide relative z-10">
-							Expired
-						</p>
-						<p className="text-3xl sm:text-4xl font-black text-rose-600 mt-2 relative z-10">
-							{stats.expired}
-						</p>
-					</div>
-				</div>
+				)}
 
 				{/* Common Search Box */}
 				<div className="mb-8 relative max-w-2xl group">
@@ -272,16 +396,48 @@ export default function Dashboard() {
 				{/* ================= TAB: CUSTOMERS ================= */}
 				{activeTab === "customers" && (
 					<div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-						<div className="p-5 sm:p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white">
-							<h3 className="text-xl font-extrabold text-gray-800">
-								Customer Database
-							</h3>
-							<button
-								onClick={addCustomer}
-								className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-orange-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-[0_4px_14px_0_rgba(234,88,12,0.39)] hover:shadow-[0_6px_20px_rgba(234,88,12,0.23)] hover:-translate-y-0.5 active:translate-y-0 active:scale-95 transition-all"
-							>
-								+ New Customer
-							</button>
+						{/* HEADER & FILTERS */}
+						<div className="p-5 sm:p-6 border-b border-gray-100 bg-white">
+							<div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+								<h3 className="text-xl font-extrabold text-gray-800">
+									Customer Database
+								</h3>
+								<button
+									onClick={addCustomer}
+									className="w-full md:w-auto bg-gradient-to-r from-orange-500 to-orange-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-[0_4px_14px_0_rgba(234,88,12,0.39)] hover:shadow-[0_6px_20px_rgba(234,88,12,0.23)] hover:-translate-y-0.5 active:translate-y-0 active:scale-95 transition-all"
+								>
+									+ New Customer
+								</button>
+							</div>
+
+							<div className="flex flex-wrap gap-2 pt-2 border-t border-gray-50">
+								<button
+									onClick={() => setCustomerFilter("all")}
+									className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${customerFilter === "all" ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+								>
+									All
+								</button>
+								<button
+									onClick={() =>
+										setCustomerFilter("expiring")
+									}
+									className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${customerFilter === "expiring" ? "bg-amber-500 text-white" : "bg-amber-50 text-amber-700 hover:bg-amber-100"}`}
+								>
+									⏳ Expiring Soon
+								</button>
+								<button
+									onClick={() => setCustomerFilter("expired")}
+									className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${customerFilter === "expired" ? "bg-rose-500 text-white" : "bg-rose-50 text-rose-700 hover:bg-rose-100"}`}
+								>
+									🛑 Expired
+								</button>
+								<button
+									onClick={() => setCustomerFilter("due")}
+									className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${customerFilter === "due" ? "bg-blue-500 text-white" : "bg-blue-50 text-blue-700 hover:bg-blue-100"}`}
+								>
+									💰 Due Amount
+								</button>
+							</div>
 						</div>
 
 						<div className="overflow-x-auto w-full">
@@ -368,13 +524,13 @@ export default function Dashboard() {
 														{c.remainingAmount >
 															0 && (
 															<span className="px-2 py-0.5 bg-rose-50 text-rose-600 text-xs font-bold rounded-md border border-rose-100">
-																<p className="text-green-500">
+																<span className="text-green-500">
 																	Paid: ₹
 																	{
 																		c.paidAmount
-																	}
-																</p>
-																Due: ₹
+																	}{" "}
+																</span>
+																<br /> Due: ₹
 																{
 																	c.remainingAmount
 																}
@@ -391,6 +547,18 @@ export default function Dashboard() {
 														>
 															📞
 														</a>
+														{/* NAYA WHATSAPP BUTTON */}
+														<button
+															onClick={() =>
+																sendWhatsAppMessage(
+																	c,
+																)
+															}
+															className="p-2.5 bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 rounded-xl transition-colors"
+															title="WhatsApp Reminder"
+														>
+															💬
+														</button>
 														<button
 															onClick={() =>
 																openEditModal(c)
@@ -495,10 +663,19 @@ export default function Dashboard() {
 				{/* ================= TAB: PARCELS ================= */}
 				{activeTab === "parcels" && (
 					<div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-						<div className="p-5 sm:p-6 border-b border-gray-100 bg-white">
+						<div className="p-5 sm:p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white">
 							<h3 className="text-xl font-extrabold text-gray-800">
 								Active Deliveries
 							</h3>
+							<button
+								onClick={handleGenerateParcels}
+								disabled={isGenerating}
+								className="w-full sm:w-auto bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-600 hover:text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
+							>
+								{isGenerating
+									? "Generating..."
+									: "⚡ Generate Today's Deliveries"}
+							</button>
 						</div>
 						<div className="overflow-x-auto w-full">
 							<table className="w-full text-left border-collapse whitespace-nowrap">
@@ -530,7 +707,9 @@ export default function Dashboard() {
 												</div>
 												<p className="text-gray-500 font-medium">
 													Aaj ke liye koi parcel
-													pending nahi hai.
+													pending nahi hai. <br />
+													(Yaa fir apne Generate
+													Button click nahi kiya!)
 												</p>
 											</td>
 										</tr>
@@ -565,12 +744,11 @@ export default function Dashboard() {
 													<span className="text-orange-500 mr-1">
 														📍
 													</span>
-													{parcel.customer?.address}
+													{parcel.customer?.address ||
+														"Address not provided"}
 												</td>
 												<td className="p-5">
-													<span
-														className={`px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wide border ${parcel.status === "Pending" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}`}
-													>
+													<span className="px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wide border bg-amber-50 text-amber-700 border-amber-200">
 														{parcel.status}
 													</span>
 												</td>
@@ -583,8 +761,15 @@ export default function Dashboard() {
 														>
 															📞
 														</a>
-														<button className="px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-100 hover:border-emerald-200 rounded-xl text-sm font-bold transition-all">
-															Mark Done
+														<button
+															onClick={() =>
+																handleMarkDone(
+																	parcel.id,
+																)
+															}
+															className="px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-600 hover:text-white rounded-xl text-sm font-bold transition-all"
+														>
+															✓ Mark Done
 														</button>
 													</div>
 												</td>
@@ -620,7 +805,6 @@ export default function Dashboard() {
 						</div>
 
 						<form onSubmit={handleEditSubmit} className="space-y-8">
-							{/* SECTION 1: EDIT DETAILS */}
 							<div className="bg-gray-50/50 p-5 rounded-2xl border border-gray-100">
 								<h4 className="text-sm font-bold text-gray-400 tracking-wider uppercase mb-4">
 									Personal Details
@@ -704,7 +888,6 @@ export default function Dashboard() {
 								</div>
 							</div>
 
-							{/* SECTION 2: RENEWAL & PAYMENT */}
 							<div className="bg-gradient-to-br from-orange-50 to-amber-50 p-6 rounded-2xl border border-orange-100 shadow-inner">
 								<div className="flex justify-between items-end mb-5">
 									<h4 className="text-sm font-bold text-orange-800 tracking-wider uppercase">
