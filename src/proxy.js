@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-export function middleware(request) {
+export function proxy(request) {
 	// FIX: Localhost aur Vercel (HTTPS) dono ki cookies ko check karein
 	const token =
 		request.cookies.get("next-auth.session-token") ||
