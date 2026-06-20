@@ -19,8 +19,8 @@ export default function AddCustomer() {
 		startDate: "",
 		paymentDate: "",
 		numberOfDays: 30,
-		totalAmount: 0, // Naya: Total Bill
-		paidAmount: 0, // Naya: Kitna jama kiya
+		totalAmount: "", // Naya: Total Bill
+		paidAmount: "", // Naya: Kitna jama kiya
 		remainingAmount: 0, // Naya: Auto-calculated udhaar
 		paymentStatus: "Paid",
 	});
@@ -254,6 +254,7 @@ export default function AddCustomer() {
 								</label>
 								<input
 									type="date"
+									required
 									name="paymentDate"
 									value={formData.paymentDate}
 									onChange={handleChange}
@@ -277,7 +278,8 @@ export default function AddCustomer() {
 										Total Amount (₹)
 									</label>
 									<input
-										type="number"
+										placeholder="3000"
+										type="text"
 										name="totalAmount"
 										value={formData.totalAmount}
 										onChange={handleChange}
@@ -291,7 +293,8 @@ export default function AddCustomer() {
 										Paid Amount (Jama ₹)
 									</label>
 									<input
-										type="number"
+										placeholder="3000"
+										type="text"
 										name="paidAmount"
 										value={formData.paidAmount}
 										onChange={handleChange}

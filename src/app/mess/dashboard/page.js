@@ -368,6 +368,12 @@ export default function Dashboard() {
 														{c.remainingAmount >
 															0 && (
 															<span className="px-2 py-0.5 bg-rose-50 text-rose-600 text-xs font-bold rounded-md border border-rose-100">
+																<p className="text-green-500">
+																	Paid: ₹
+																	{
+																		c.paidAmount
+																	}
+																</p>
 																Due: ₹
 																{
 																	c.remainingAmount
