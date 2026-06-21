@@ -22,23 +22,26 @@ model Owner {
 
 // ================= Tenant (Mess Owner) Model =================
 model Mess {
-  id               Int      @id @default(autoincrement())
-  customDomain     String   @unique
-  messName         String
-  address          String?
-  subscriptionPlan String
+  id                  Int      @id @default(autoincrement())
+  customDomain        String   @unique
+  messName            String
+  address             String?
+  subscriptionPlan    String
   
-  ownerId          Int      @unique
-  owner            Owner    @relation(fields: [ownerId], references: [id])
+  subscriptionEndDate DateTime 
   
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  ownerId             Int      @unique
+  // CASCADE ADDED: Owner delete hoga toh Mess delete ho jayegi
+  owner               Owner    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   
-  // Relations (Is mess ke andar kya-kya hai)
-  customers        Customer[]
-  employees        Employee[]
-  parcels          Parcel[]
-  paymentHistory   PaymentHistory[]
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  customers           Customer[]
+  employees           Employee[]
+  parcels             Parcel[]
+  paymentHistory      PaymentHistory[]
+  platformPayments    PlatformPayment[] 
 }
 
 // ================= Core Modules Data =================
@@ -57,12 +60,13 @@ model Customer {
   paymentDate     DateTime?
   numberOfDays    Int      
   daysLeft        Int      
-  paidAmount      Int       @default(0)
+  paidAmount      Int      @default(0)
   totalAmount     Int      @default(0) 
   remainingAmount Int      @default(0) 
   paymentStatus   String   
   
-  mess            Mess     @relation(fields: [messId], references: [id])
+  // CASCADE ADDED: Mess delete hogi toh Customer delete ho jayega
+  mess            Mess     @relation(fields: [messId], references: [id], onDelete: Cascade)
   parcels         Parcel[]
   paymentHistory  PaymentHistory[] 
 }
@@ -80,8 +84,9 @@ model PaymentHistory {
   remainingAmount Int      @default(0) 
   paymentStatus   String
 
-  customer        Customer @relation(fields: [customerId], references: [id])
-  mess            Mess     @relation(fields: [messId], references: [id])
+  // CASCADE ADDED
+  customer        Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  mess            Mess     @relation(fields: [messId], references: [id], onDelete: Cascade)
 }
 
 // 3. Employee Management (Staff)
@@ -92,7 +97,8 @@ model Employee {
   role       String 
   baseSalary Int
   
-  mess       Mess   @relation(fields: [messId], references: [id])
+  // CASCADE ADDED
+  mess       Mess   @relation(fields: [messId], references: [id], onDelete: Cascade)
 }
 
 // 4. Parcel & Delivery Section
@@ -103,6 +109,26 @@ model Parcel {
   address    String   
   status     String   @default("Pending")
   
-  mess       Mess     @relation(fields: [messId], references: [id])
-  customer   Customer @relation(fields: [customerId], references: [id])
+  // CASCADE ADDED
+  mess       Mess     @relation(fields: [messId], references: [id], onDelete: Cascade)
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+// ================= SaaS Platform Subscriptions Data =================
+
+// 5. Razorpay Payments (Mess Owner -> Mess-Point Platform)
+model PlatformPayment {
+  id                Int      @id @default(autoincrement())
+  messId            Int
+  
+  razorpayOrderId   String   @unique 
+  razorpayPaymentId String?  @unique 
+  amount            Int      
+  status            String   @default("PENDING") 
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // CASCADE ADDED
+  mess              Mess     @relation(fields: [messId], references: [id], onDelete: Cascade)
 }

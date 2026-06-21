@@ -3,6 +3,10 @@ import prisma from "@/lib/prisma"; // Humari banayi hui global prisma file
 import bcrypt from "bcryptjs";
 
 export async function POST(request) {
+const freeSubscription = 5;
+
+
+
 	try {
 		// 1. Frontend se aane wale data ko parse karna
 		const body = await request.json();
@@ -65,9 +69,15 @@ export async function POST(request) {
 		// 4. Password Hashing (Security)
 		const salt = await bcrypt.genSalt(10);
 		const hashedPassword = await bcrypt.hash(password, salt);
-
+		const today = new Date();
 		// 5. Database Save - Prisma Nested Writes
 		// Yeh Owner aur Mess dono tables mein ek saath data banayega aur unhe link kar dega
+
+		const subscriptionDate = new Date();
+		// console.log("Aaj ki date:", currentDate.toDateString());
+
+		// 2. 5 din add karein
+		currentDate.setDate(currentDate.getDate() + freeSubscription);
 		const newRegistration = await prisma.owner.create({
 			data: {
 				firstName,
@@ -81,6 +91,8 @@ export async function POST(request) {
 						address: address || "",
 						customDomain,
 						subscriptionPlan: plan || "basic", // Frontend se aaya hua selected plan save hoga
+						subscriptionEndDate: subscriptionDate, // Frontend se aaya hua selected plan save hoga
+						
 					},
 				},
 			},

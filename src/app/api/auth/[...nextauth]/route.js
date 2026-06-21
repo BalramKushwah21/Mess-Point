@@ -24,7 +24,7 @@ export const authOptions = {
 						mess: true, // Owner ke sath uski Mess ki details bhi fetch karein
 					},
 				});
-				console.log(credentials.email);
+			
 
 				// Agar email database mein nahi hai
 				if (!owner) {
@@ -53,6 +53,8 @@ export const authOptions = {
 					name: owner.firstName + " " + owner.lastName,
 					messId: owner.mess?.id,
 					messSlug: owner.mess?.slug,
+					// NAYA CODE: Mess object se subscription expiry date nikal rahe hain
+					subscriptionEndDate: owner.mess?.subscriptionEndDate,
 				};
 			},
 		}),
@@ -64,6 +66,8 @@ export const authOptions = {
 				token.id = user.id;
 				token.messId = user.messId;
 				token.messSlug = user.messSlug;
+				// NAYA CODE: Token mein expiry date save kar rahe hain
+				token.subscriptionEndDate = user.subscriptionEndDate;
 			}
 			return token;
 		},
@@ -73,6 +77,8 @@ export const authOptions = {
 				session.user.id = token.id;
 				session.user.messId = token.messId;
 				session.user.messSlug = token.messSlug;
+				// NAYA CODE: Frontend aur Middleware ke liye session mein add kar rahe hain
+				session.user.subscriptionEndDate = token.subscriptionEndDate;
 			}
 			return session;
 		},
