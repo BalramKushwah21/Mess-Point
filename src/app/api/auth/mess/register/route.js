@@ -69,15 +69,15 @@ const freeSubscription = 5;
 		// 4. Password Hashing (Security)
 		const salt = await bcrypt.genSalt(10);
 		const hashedPassword = await bcrypt.hash(password, salt);
-		const today = new Date();
+		
 		// 5. Database Save - Prisma Nested Writes
 		// Yeh Owner aur Mess dono tables mein ek saath data banayega aur unhe link kar dega
 
-		const subscriptionDate = new Date();
-		// console.log("Aaj ki date:", currentDate.toDateString());
-
+		const currentDate = new Date();
+		
 		// 2. 5 din add karein
 		currentDate.setDate(currentDate.getDate() + freeSubscription);
+		const subscriptionDate = currentDate;
 		const newRegistration = await prisma.owner.create({
 			data: {
 				firstName,
