@@ -6,8 +6,8 @@ import { signOut } from "next-auth/react";
 export default function RenewPlan() {
 	// 1. Apni Details Yahan Daalein
 	const adminWhatsApp = "9285022678";
-	const upiId = "baldau81@ybl"; // Apna asli UPI ID
-	const payeeName = "Mess Point"; // Apna Business/Mess ka naam
+	const upiId = "baldau11@naviaxis"; // Apna asli UPI ID
+	const payeeName = "Balram Kushwah"; // Apna Business/Mess ka naam
 
 	// 2. Plans ka data define karein
 	const plans = {
