@@ -5,10 +5,11 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 export async function POST(request) {
 	try {
+		// 1. Session & Authentication Check
 		const session = await getServerSession(authOptions);
 		if (!session || !session.user || !session.user.messId) {
 			return NextResponse.json(
-				{ error: "Unauthorized" },
+				{ error: "Unauthorized access. Please log in." },
 				{ status: 401 },
 			);
 		}
@@ -16,78 +17,108 @@ export async function POST(request) {
 		const messId = parseInt(session.user.messId);
 		const body = await request.json();
 
-		// Frontend se aane wali editable details aur naye payment/days
+		// 2. Data Destructuring from Frontend Payload
 		const {
 			id,
 			name,
 			phone,
 			address,
-			plan,
 			mealsPerDay,
 			deliveryType,
 			addedDays,
 			billAmount,
 			paidAmount,
-			paymentStatus,
 		} = body;
 
-		// 1. Pehle customer ka purana data fetch karein
-		const currentCustomer = await prisma.customer.findUnique({
-			where: { id: parseInt(id) },
+		const customerId = parseInt(id);
+		const parsedAddedDays = parseInt(addedDays) || 0;
+		const parsedBillAmount = parseInt(billAmount) || 0;
+		const parsedPaidAmount = parseInt(paidAmount) || 0;
+
+		// 3. Security: Fetch existing customer to calculate current dues correctly
+		const existingCustomer = await prisma.customer.findUnique({
+			where: { id: customerId, messId: messId },
 		});
 
-		// 2. Naye totals calculate karein
-		const newDaysLeft = currentCustomer.daysLeft + parseInt(addedDays);
-		const newTotalAmount =
-			currentCustomer.totalAmount + parseInt(billAmount);
-
-		// Udhaar Calculation: (Purana Udhaar + Naya Bill - Aaj ka Jama)
-		const currentRemaining = currentCustomer.remainingAmount;
-		const newRemainingAmount = Math.max(
-			currentRemaining + parseInt(billAmount) - parseInt(paidAmount),
-			0,
-		);
-
-		// 3. Customer Data Update Karein (Editable Fields + New Calculations)
-		const updatedCustomer = await prisma.customer.update({
-			where: { id: parseInt(id) },
-			data: {
-				name,
-				phone,
-				address,
-				plan,
-				mealsPerDay: parseInt(mealsPerDay),
-				deliveryType,
-				daysLeft: newDaysLeft,
-				totalAmount: newTotalAmount,
-				remainingAmount: newRemainingAmount,
-				paymentStatus: newRemainingAmount > 0 ? "Pending" : "Paid",
-			},
-		});
-
-		// 4. LIFETIME HISTORY LOG CREATE KAREIN (Taki purana record kabhi delete na ho)
-		if (addedDays > 0 || billAmount > 0 || paidAmount > 0) {
-			await prisma.paymentHistory.create({
-				data: {
-					customerId: parseInt(id),
-					messId: messId,
-					addedDays: parseInt(addedDays),
-					billAmount: parseInt(billAmount),
-					paidAmount: parseInt(paidAmount),
-					remainingAmount: newRemainingAmount,
-					paymentStatus: paymentStatus,
-				},
-			});
+		if (!existingCustomer) {
+			return NextResponse.json(
+				{ error: "Customer not found or access denied." },
+				{ status: 404 },
+			);
 		}
 
+		// 4. Mathematical Calculations
+		// Naya bacha hua paisa = (Purana baki + Naya Bill) - Naya Paid Amount
+		const newRemainingAmount =
+			existingCustomer.remainingAmount +
+			parsedBillAmount -
+			parsedPaidAmount;
+
+		// Payment Status Logic
+		let newPaymentStatus = "Pending";
+		if (newRemainingAmount <= 0) {
+			newPaymentStatus = "Paid";
+		} else if (parsedPaidAmount > 0 || existingCustomer.paidAmount > 0) {
+			newPaymentStatus = "Partial";
+		}
+
+		// 5. Database Transactions (Atomicity: Ek fail hua toh sab fail)
+		const transaction = await prisma.$transaction(async (prisma) => {
+			// Step A: Customer Table Update Karein [cite: 333, 335]
+			const updatedCustomer = await prisma.customer.update({
+				where: { id: customerId },
+				data: {
+					name,
+					phone,
+					address,
+					mealsPerDay: parseInt(mealsPerDay),
+					deliveryType,
+					// Yeh sabse important logic hai jisse din badhenge:
+					numberOfDays: { increment: parsedAddedDays },
+					daysLeft: { increment: parsedAddedDays },
+
+					totalAmount: { increment: parsedBillAmount },
+					paidAmount: { increment: parsedPaidAmount },
+					remainingAmount: newRemainingAmount,
+					paymentStatus: newPaymentStatus,
+
+					// Agar koi payment kari gayi hai, toh payment date update karein
+					...(parsedPaidAmount > 0 && { paymentDate: new Date() }),
+				},
+			});
+
+			// Step B: Payment History Table mein log save karein [cite: 336, 337]
+			// Sirf tab create karein jab actually mein kuch data add hua ho
+			if (
+				parsedAddedDays > 0 ||
+				parsedBillAmount > 0 ||
+				parsedPaidAmount > 0
+			) {
+				await prisma.paymentHistory.create({
+					data: {
+						customerId: customerId,
+						messId: messId,
+						addedDays: parsedAddedDays,
+						billAmount: parsedBillAmount,
+						paidAmount: parsedPaidAmount,
+						remainingAmount: newRemainingAmount,
+						paymentStatus: newPaymentStatus,
+					},
+				});
+			}
+
+			return updatedCustomer;
+		});
+
+		// 6. Success Response
 		return NextResponse.json(
-			{ message: "Customer Successfully Updated & Renewed!" },
+			{ success: true, customer: transaction },
 			{ status: 200 },
 		);
 	} catch (error) {
-		console.error("Renew Error:", error);
+		console.error("Error in Renewing Customer:", error);
 		return NextResponse.json(
-			{ error: "Data save karne mein problem aayi." },
+			{ error: "Internal Server Error. Please try again." },
 			{ status: 500 },
 		);
 	}

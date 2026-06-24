@@ -23,10 +23,44 @@ export async function GET(request) {
 		});
 
 		// 2. Fetch Customers
-		const customers = await prisma.customer.findMany({
+		const rawCustomers = await prisma.customer.findMany({
 			where: { messId: messId },
 			orderBy: { id: "desc" },
 		});
+
+		// ================= DATE LOGIC (AAPKA FORMULA) =================
+		const today = new Date();
+		// Timezone/Time-of-day issues se bachne ke liye dono dates ko midnight par set karna
+		const normalizedToday = new Date(
+			today.getFullYear(),
+			today.getMonth(),
+			today.getDate(),
+		);
+
+		const customers = rawCustomers.map((customer) => {
+			const startDate = new Date(customer.startDate);
+			const normalizedStart = new Date(
+				startDate.getFullYear(),
+				startDate.getMonth(),
+				startDate.getDate(),
+			);
+
+			// Milliseconds ko Days mein convert karna
+			const differenceInTime =
+				normalizedToday.getTime() - normalizedStart.getTime();
+			const differenceInDays = Math.floor(
+				differenceInTime / (1000 * 60 * 60 * 24),
+			);
+
+			// Formula: numberOfDays - (todayDate - startDate)
+			const calculatedDaysLeft = customer.numberOfDays - differenceInDays;
+
+			return {
+				...customer,
+				daysLeft: calculatedDaysLeft, // Ye database value ko override kar dega
+			};
+		});
+		// ==============================================================
 
 		// 3. Fetch Employees
 		const employees = await prisma.employee.findMany({
@@ -34,7 +68,7 @@ export async function GET(request) {
 			orderBy: { name: "asc" },
 		});
 
-		// 4. NAYA CODE: Fetch Active Parcels from Database
+		// 4. Fetch Active Parcels from Database
 		const parcels = await prisma.parcel.findMany({
 			where: {
 				messId: messId,
@@ -47,7 +81,7 @@ export async function GET(request) {
 			},
 		});
 
-		// 5. Stats Calculate
+		// 5. Stats Calculate (Ab naye dynamic daysLeft par base karega)
 		const total = customers.length;
 		const active = customers.filter((c) => c.daysLeft > 3).length;
 		const expiring = customers.filter(
@@ -59,9 +93,9 @@ export async function GET(request) {
 			{
 				messName: messDetails?.messName || "Mess-Point",
 				stats: { total, active, expiring, expired },
-				customers,
+				customers, // Ye array ab dynamically calculated daysLeft bhejegi
 				employees,
-				parcels, // API ab parcels return karegi
+				parcels,
 			},
 			{ status: 200 },
 		);
