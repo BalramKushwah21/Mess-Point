@@ -28,6 +28,8 @@ export async function POST(request) {
 			addedDays,
 			billAmount,
 			paidAmount,
+			startDate, // Frontend se aayi hui start date
+			paymentDate, // Frontend se aayi hui payment date
 		} = body;
 
 		const customerId = parseInt(id);
@@ -62,9 +64,27 @@ export async function POST(request) {
 			newPaymentStatus = "Partial";
 		}
 
-		// 5. Database Transactions (Atomicity: Ek fail hua toh sab fail)
+		// 5. Database Transactions (Atomicity)
 		const transaction = await prisma.$transaction(async (prisma) => {
-			// Step A: Customer Table Update Karein [cite: 333, 335]
+			// Handle Dates: Convert string to Date objects
+			let updatedStartDate = undefined;
+			if (startDate) {
+				const sDate = new Date(startDate);
+				if (!isNaN(sDate.getTime())) updatedStartDate = sDate;
+			}
+
+			let updatedPaymentDate = undefined;
+			if (paymentDate) {
+				const pDate = new Date(paymentDate);
+				if (!isNaN(pDate.getTime())) updatedPaymentDate = pDate;
+			}
+
+			// Fallback for payment date if not provided but payment is made
+			if (parsedPaidAmount > 0 && !updatedPaymentDate) {
+				updatedPaymentDate = new Date();
+			}
+
+			// Step A: Customer Table Update
 			const updatedCustomer = await prisma.customer.update({
 				where: { id: customerId },
 				data: {
@@ -73,7 +93,13 @@ export async function POST(request) {
 					address,
 					mealsPerDay: parseInt(mealsPerDay),
 					deliveryType,
-					// Yeh sabse important logic hai jisse din badhenge:
+
+					// FIXED: Changed 'membershipStart' to 'startDate'
+					...(updatedStartDate && { startDate: updatedStartDate }),
+					...(updatedPaymentDate && {
+						paymentDate: updatedPaymentDate,
+					}),
+
 					numberOfDays: { increment: parsedAddedDays },
 					daysLeft: { increment: parsedAddedDays },
 
@@ -81,14 +107,10 @@ export async function POST(request) {
 					paidAmount: { increment: parsedPaidAmount },
 					remainingAmount: newRemainingAmount,
 					paymentStatus: newPaymentStatus,
-
-					// Agar koi payment kari gayi hai, toh payment date update karein
-					...(parsedPaidAmount > 0 && { paymentDate: new Date() }),
 				},
 			});
 
-			// Step B: Payment History Table mein log save karein [cite: 336, 337]
-			// Sirf tab create karein jab actually mein kuch data add hua ho
+			// Step B: Payment History Table
 			if (
 				parsedAddedDays > 0 ||
 				parsedBillAmount > 0 ||
